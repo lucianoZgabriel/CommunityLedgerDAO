@@ -11,7 +11,15 @@ contract CommunityLedgerAdapter {
         i_owner = msg.sender;
     }
 
+    function getImplAddress() external view returns (address) {
+        return address(implementation);
+    }
+
     function setImplementation(address _implementation) external {
+        require(
+            msg.sender == i_owner,
+            "Only the owner can set the implementation"
+        );
         implementation = ICommunityLedger(_implementation);
     }
 
@@ -25,10 +33,6 @@ contract CommunityLedgerAdapter {
 
     function setCounselor(address _resident, bool _isEntering) external {
         implementation.setCounselor(_resident, _isEntering);
-    }
-
-    function setManager(address _newManager) external {
-        implementation.setManager(_newManager);
     }
 
     function createProposal(

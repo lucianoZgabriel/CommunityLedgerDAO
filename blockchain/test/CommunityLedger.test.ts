@@ -98,26 +98,11 @@ describe("CommunityLedger", function () {
     ).to.be.revertedWith("The counselor must be a resident");
   });
 
-  it("should change the manager correctly", async function () {
-    const { communityLedger, resident } = await loadFixture(deployContract);
-    await communityLedger.setManager(resident.address);
-    expect(await communityLedger.manager()).to.equal(resident.address);
-  });
-
-  it("should NOT change the manager correctly if not manager", async function () {
-    const { communityLedger, resident } = await loadFixture(deployContract);
-    const instance = communityLedger.connect(resident);
-    await expect(instance.setManager(resident.address)).to.be.revertedWith(
-      "Only manager can call this function"
-    );
-  });
-
-  it("should NOT change the manager to the zero address", async function () {
-    const { communityLedger, resident } = await loadFixture(deployContract);
-    await expect(
-      communityLedger.setManager(ethers.ZeroAddress)
-    ).to.be.revertedWith("Manager cannot be the zero address");
-  });
+  // it("should change the manager correctly", async function () {
+  //   const { communityLedger, resident } = await loadFixture(deployContract);
+  //   await communityLedger.setManager(resident.address);
+  //   expect(await communityLedger.manager()).to.equal(resident.address);
+  // });
 
   it("should create a proposal correctly if manager", async function () {
     const { communityLedger, resident } = await loadFixture(deployContract);

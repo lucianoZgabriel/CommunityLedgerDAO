@@ -24,13 +24,13 @@ contract CommunityLedger is ICommunityLedger {
     }
 
     modifier onlyManager() {
-        require(msg.sender == manager, "Only manager can call this function");
+        require(tx.origin == manager, "Only manager can call this function");
         _;
     }
 
     modifier onlyCouncil() {
         require(
-            msg.sender == manager || isCounselor(msg.sender),
+            tx.origin == manager || isCounselor(tx.origin),
             "Only manager or counselor can call this function"
         );
         _;
@@ -38,7 +38,7 @@ contract CommunityLedger is ICommunityLedger {
 
     modifier onlyResident() {
         require(
-            msg.sender == manager || isResident(msg.sender),
+            tx.origin == manager || isResident(tx.origin),
             "Only manager or resident can call this function"
         );
         _;
@@ -83,11 +83,6 @@ contract CommunityLedger is ICommunityLedger {
         } else {
             delete counselors[resident];
         }
-    }
-
-    function setManager(address newManager) external onlyManager {
-        require(newManager != address(0), "Manager cannot be the zero address");
-        manager = newManager;
     }
 
     function getProposal(
@@ -154,7 +149,7 @@ contract CommunityLedger is ICommunityLedger {
         require(proposal.createdAt > 0, "Proposal does not exist");
         require(proposal.status == Lib.VoteStatus.VOTING, "Vote is not open");
 
-        uint16 residence = residents[msg.sender];
+        uint16 residence = residents[tx.origin];
         bytes32 proposalId = keccak256(bytes(title));
 
         Lib.Vote[] memory proposalVotes = votes[proposalId];
@@ -163,7 +158,7 @@ contract CommunityLedger is ICommunityLedger {
         }
 
         Lib.Vote memory newVote = Lib.Vote({
-            voter: msg.sender,
+            voter: tx.origin,
             residence: residence,
             option: option,
             createdAt: block.timestamp

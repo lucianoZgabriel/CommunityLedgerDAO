@@ -1,7 +1,21 @@
 {
   "name": "hardhat-project",
+  "version": "0.0.1",
+  "description": "Community Ledger",
+  "scripts": {
+    "build": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "coverage": "npx hardhat coverage"
+  },
+  "keywords": [
+    "community",
+    "ledger"
+  ],
+  "author": "Luciano Zanin Gabrielli",
+  "license": "MIT",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
-    "hardhat": "^2.22.16"
+    "hardhat": "^2.22.16",
+    "solidity-coverage": "^0.8.14"
   }
 }

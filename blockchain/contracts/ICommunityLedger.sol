@@ -12,7 +12,6 @@ interface ICommunityLedger {
     function setCounselor(address resident, bool isEntering) external;
 
     //TODO: Change setManager to be voted on by the community
-    function setManager(address newManager) external;
 
     //TODO: Improve proposal creation to allow for more complex proposals
     function createProposal(
