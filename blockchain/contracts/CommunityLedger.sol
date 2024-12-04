@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import "./CommunityLedgerLib.sol";
+import {CommunityLedgerLib as Lib} from "./CommunityLedgerLib.sol";
+import {ICommunityLedger} from "./ICommunityLedger.sol";
 
-contract CommunityLedger {
+contract CommunityLedger is ICommunityLedger {
     address public manager;
     mapping(uint16 => bool) public residences;
     mapping(address => uint16) public residents;
     mapping(address => bool) public counselors;
 
-    mapping(bytes32 => CommunityLedgerLib.Proposal) public proposals;
-    mapping(bytes32 => CommunityLedgerLib.Vote[]) public votes;
+    mapping(bytes32 => Lib.Proposal) public proposals;
+    mapping(bytes32 => Lib.Vote[]) public votes;
 
     constructor() {
         manager = msg.sender;
@@ -91,7 +92,7 @@ contract CommunityLedger {
 
     function getProposal(
         string memory title
-    ) public view returns (CommunityLedgerLib.Proposal memory) {
+    ) public view returns (Lib.Proposal memory) {
         bytes32 proposalId = keccak256(bytes(title));
         return proposals[proposalId];
     }
@@ -106,25 +107,24 @@ contract CommunityLedger {
     ) external onlyResident {
         require(!isProposal(title), "Proposal already exists");
 
-        CommunityLedgerLib.Proposal memory newProposal = CommunityLedgerLib
-            .Proposal({
-                title: title,
-                description: description,
-                createdAt: block.timestamp,
-                updatedAt: 0,
-                endDate: 0,
-                status: CommunityLedgerLib.VoteStatus.PENDING
-            });
+        Lib.Proposal memory newProposal = Lib.Proposal({
+            title: title,
+            description: description,
+            createdAt: block.timestamp,
+            updatedAt: 0,
+            endDate: 0,
+            status: Lib.VoteStatus.PENDING
+        });
 
         bytes32 proposalId = keccak256(bytes(title));
         proposals[proposalId] = newProposal;
     }
 
     function removeProposal(string memory title) external onlyManager {
-        CommunityLedgerLib.Proposal memory proposal = getProposal(title);
+        Lib.Proposal memory proposal = getProposal(title);
         require(proposal.createdAt > 0, "Proposal does not exist");
         require(
-            proposal.status == CommunityLedgerLib.VoteStatus.PENDING,
+            proposal.status == Lib.VoteStatus.PENDING,
             "Only pending proposals can be removed"
         );
 
@@ -132,43 +132,37 @@ contract CommunityLedger {
     }
 
     function openVote(string memory title) external onlyManager {
-        CommunityLedgerLib.Proposal memory proposal = getProposal(title);
+        Lib.Proposal memory proposal = getProposal(title);
         require(proposal.createdAt > 0, "Proposal does not exist");
         require(
-            proposal.status == CommunityLedgerLib.VoteStatus.PENDING,
+            proposal.status == Lib.VoteStatus.PENDING,
             "Proposal is not pending"
         );
 
         bytes32 proposalId = keccak256(bytes(title));
-        proposals[proposalId].status = CommunityLedgerLib.VoteStatus.VOTING;
+        proposals[proposalId].status = Lib.VoteStatus.VOTING;
         proposals[proposalId].updatedAt = block.timestamp;
     }
 
     function vote(
         string memory title,
-        CommunityLedgerLib.Options option
+        Lib.Options option
     ) external onlyResident {
-        require(
-            option != CommunityLedgerLib.Options.EMPTY,
-            "Option cannot be empty"
-        );
+        require(option != Lib.Options.EMPTY, "Option cannot be empty");
 
-        CommunityLedgerLib.Proposal memory proposal = getProposal(title);
+        Lib.Proposal memory proposal = getProposal(title);
         require(proposal.createdAt > 0, "Proposal does not exist");
-        require(
-            proposal.status == CommunityLedgerLib.VoteStatus.VOTING,
-            "Vote is not open"
-        );
+        require(proposal.status == Lib.VoteStatus.VOTING, "Vote is not open");
 
         uint16 residence = residents[msg.sender];
         bytes32 proposalId = keccak256(bytes(title));
 
-        CommunityLedgerLib.Vote[] memory proposalVotes = votes[proposalId];
+        Lib.Vote[] memory proposalVotes = votes[proposalId];
         for (uint8 i = 0; i < proposalVotes.length; i++) {
             require(proposalVotes[i].residence != residence, "Already voted");
         }
 
-        CommunityLedgerLib.Vote memory newVote = CommunityLedgerLib.Vote({
+        Lib.Vote memory newVote = Lib.Vote({
             voter: msg.sender,
             residence: residence,
             option: option,
@@ -179,42 +173,31 @@ contract CommunityLedger {
     }
 
     function closeVote(string memory title) external onlyManager {
-        CommunityLedgerLib.Proposal memory proposal = getProposal(title);
+        Lib.Proposal memory proposal = getProposal(title);
         require(proposal.createdAt > 0, "Proposal does not exist");
-        require(
-            proposal.status == CommunityLedgerLib.VoteStatus.VOTING,
-            "Vote is not open"
-        );
+        require(proposal.status == Lib.VoteStatus.VOTING, "Vote is not open");
 
         uint8 yesVotes = 0;
         uint8 noVotes = 0;
         uint8 abstainVotes = 0;
 
         bytes32 proposalId = keccak256(bytes(title));
-        CommunityLedgerLib.Vote[] memory proposalVotes = votes[proposalId];
+        Lib.Vote[] memory proposalVotes = votes[proposalId];
 
         for (uint8 i = 0; i < proposalVotes.length; i++) {
-            if (proposalVotes[i].option == CommunityLedgerLib.Options.YES) {
+            if (proposalVotes[i].option == Lib.Options.YES) {
                 yesVotes++;
-            } else if (
-                proposalVotes[i].option == CommunityLedgerLib.Options.NO
-            ) {
+            } else if (proposalVotes[i].option == Lib.Options.NO) {
                 noVotes++;
-            } else if (
-                proposalVotes[i].option == CommunityLedgerLib.Options.ABSTAIN
-            ) {
+            } else if (proposalVotes[i].option == Lib.Options.ABSTAIN) {
                 abstainVotes++;
             }
         }
 
         if (yesVotes > noVotes) {
-            proposals[proposalId].status = CommunityLedgerLib
-                .VoteStatus
-                .APPROVED;
+            proposals[proposalId].status = Lib.VoteStatus.APPROVED;
         } else {
-            proposals[proposalId].status = CommunityLedgerLib
-                .VoteStatus
-                .REJECTED;
+            proposals[proposalId].status = Lib.VoteStatus.REJECTED;
         }
 
         proposals[proposalId].endDate = block.timestamp;

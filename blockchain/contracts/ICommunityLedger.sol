@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.27;
 
-import "./CommunityLedgerLib.sol";
+import {CommunityLedgerLib as Lib} from "./CommunityLedgerLib.sol";
 
 interface ICommunityLedger {
     function addResident(address resident, uint16 residence) external;
@@ -24,10 +24,7 @@ interface ICommunityLedger {
 
     function openVote(string memory title) external;
 
-    function vote(
-        string memory title,
-        CommunityLedgerLib.Options option
-    ) external;
+    function vote(string memory title, Lib.Options option) external;
 
     function closeVote(string memory title) external;
 
