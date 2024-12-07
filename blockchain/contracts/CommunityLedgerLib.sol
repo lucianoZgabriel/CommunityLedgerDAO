@@ -17,13 +17,23 @@ library CommunityLedgerLib {
         ABSTAIN
     }
 
+    enum Category {
+        DECISION,
+        SPENDING,
+        CHANGE_QUOTA,
+        CHANGE_MANAGER
+    }
+
     struct Proposal {
         string title;
         string description;
+        Category category;
         uint256 createdAt;
         uint256 updatedAt;
         uint256 endDate;
         VoteStatus status;
+        uint256 amount;
+        address responsible;
     }
 
     struct Vote {

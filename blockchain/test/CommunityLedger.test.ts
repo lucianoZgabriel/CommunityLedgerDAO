@@ -1,6 +1,8 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import { CommunityLedger } from "../typechain-types";
 
 describe("CommunityLedger", function () {
   enum Options {
@@ -17,11 +19,56 @@ describe("CommunityLedger", function () {
     REJECTED = 3,
   }
 
+  enum Category {
+    DECISION,
+    SPENDING,
+    CHANGE_QUOTA,
+    CHANGE_MANAGER,
+  }
+
+  async function addResidents(
+    contract: CommunityLedger,
+    count: number,
+    accounts: SignerWithAddress[]
+  ) {
+    const maxResidents = Math.min(count, accounts.length - 1);
+    let accountIndex = 1;
+    for (let floor = 1; floor <= 24 && accountIndex <= maxResidents; floor++) {
+      for (let unit = 1; unit <= 4 && accountIndex <= maxResidents; unit++) {
+        const apartmentNumber = floor * 100 + unit;
+        await contract.addResident(
+          accounts[accountIndex].address,
+          apartmentNumber
+        );
+        accountIndex++;
+      }
+    }
+  }
+
+  async function addVotes(
+    contract: CommunityLedger,
+    count: number,
+    accounts: SignerWithAddress[],
+    shouldApprove: boolean = true
+  ) {
+    const maxVoters = Math.min(count, accounts.length - 1);
+
+    for (let i = 1; i <= maxVoters; i++) {
+      const connectedContract = contract.connect(accounts[i]);
+      await connectedContract.vote(
+        "Test Proposal",
+        shouldApprove ? Options.YES : Options.NO
+      );
+    }
+  }
+
   async function deployContract() {
-    const [manager, resident] = await ethers.getSigners();
+    const accounts = await ethers.getSigners();
+    const manager = accounts[0];
+    const resident = accounts[1];
     const CommunityLedger = await ethers.getContractFactory("CommunityLedger");
     const communityLedger = await CommunityLedger.deploy();
-    return { communityLedger, manager, resident };
+    return { communityLedger, accounts, manager, resident };
   }
 
   it("should set the residences correctly", async function () {
@@ -76,10 +123,27 @@ describe("CommunityLedger", function () {
   });
 
   it("should set the counselors correctly", async function () {
-    const { communityLedger, resident } = await loadFixture(deployContract);
+    const { communityLedger, resident, accounts } = await loadFixture(
+      deployContract
+    );
     await communityLedger.addResident(resident.address, 1201);
     await communityLedger.setCounselor(resident.address, true);
+    const instance = communityLedger.connect(resident);
+    await instance.addResident(accounts[2].address, 1202);
     expect(await communityLedger.isCounselor(resident.address)).to.equal(true);
+    expect(await communityLedger.isResident(accounts[2].address)).to.equal(
+      true
+    );
+  });
+
+  it("should remove the counselors correctly", async function () {
+    const { communityLedger, resident, accounts } = await loadFixture(
+      deployContract
+    );
+    await communityLedger.addResident(resident.address, 1201);
+    await communityLedger.setCounselor(resident.address, true);
+    await communityLedger.setCounselor(resident.address, false);
+    expect(await communityLedger.isCounselor(resident.address)).to.equal(false);
   });
 
   it("should NOT set the counselors correctly if not manager", async function () {
@@ -98,17 +162,55 @@ describe("CommunityLedger", function () {
     ).to.be.revertedWith("The counselor must be a resident");
   });
 
-  // it("should change the manager correctly", async function () {
-  //   const { communityLedger, resident } = await loadFixture(deployContract);
-  //   await communityLedger.setManager(resident.address);
-  //   expect(await communityLedger.manager()).to.equal(resident.address);
-  // });
+  it("should change the manager correctly", async function () {
+    const { communityLedger, accounts, resident } = await loadFixture(
+      deployContract
+    );
+    await addResidents(communityLedger, 15, accounts);
+    await communityLedger.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.CHANGE_MANAGER,
+      0,
+      resident.address
+    );
+    await communityLedger.openVote("Test Proposal");
+
+    await addVotes(communityLedger, 15, accounts);
+    await communityLedger.closeVote("Test Proposal");
+
+    expect(await communityLedger.s_manager()).to.equal(resident.address);
+  });
+
+  it("should change the quota correctly", async function () {
+    const { communityLedger, accounts, resident } = await loadFixture(
+      deployContract
+    );
+    const quota = ethers.parseEther("0.02");
+    await addResidents(communityLedger, 20, accounts);
+    await communityLedger.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.CHANGE_QUOTA,
+      quota,
+      resident.address
+    );
+    await communityLedger.openVote("Test Proposal");
+
+    await addVotes(communityLedger, 20, accounts);
+    await communityLedger.closeVote("Test Proposal");
+
+    expect(await communityLedger.s_monthlyQuota()).to.equal(quota);
+  });
 
   it("should create a proposal correctly if manager", async function () {
     const { communityLedger, resident } = await loadFixture(deployContract);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     expect(await communityLedger.isProposal("Test Proposal")).to.equal(true);
   });
@@ -117,15 +219,40 @@ describe("CommunityLedger", function () {
     const { communityLedger, resident } = await loadFixture(deployContract);
     await communityLedger.addResident(resident.address, 1201);
     const instance = communityLedger.connect(resident);
-    await instance.createProposal("Test Proposal", "This is a test proposal");
+    await instance.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
+    );
     expect(await communityLedger.isProposal("Test Proposal")).to.equal(true);
+  });
+
+  it("should NOT create a proposal if the category is wrong (amount is not 0)", async function () {
+    const { communityLedger, resident } = await loadFixture(deployContract);
+    await expect(
+      communityLedger.createProposal(
+        "Test Proposal",
+        "This is a test proposal",
+        Category.DECISION,
+        10,
+        resident.address
+      )
+    ).to.be.revertedWith("Invalid category");
   });
 
   it("should NOT create a proposal if not resident", async function () {
     const { communityLedger, resident } = await loadFixture(deployContract);
     const instance = communityLedger.connect(resident);
     await expect(
-      instance.createProposal("Test Proposal", "This is a test proposal")
+      instance.createProposal(
+        "Test Proposal",
+        "This is a test proposal",
+        Category.DECISION,
+        0,
+        resident.address
+      )
     ).to.be.revertedWith("Only manager or resident can call this function");
   });
 
@@ -133,10 +260,19 @@ describe("CommunityLedger", function () {
     const { communityLedger, resident } = await loadFixture(deployContract);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     await expect(
-      communityLedger.createProposal("Test Proposal", "This is a test proposal")
+      communityLedger.createProposal(
+        "Test Proposal",
+        "This is a test proposal",
+        Category.DECISION,
+        0,
+        resident.address
+      )
     ).to.be.revertedWith("Proposal already exists");
   });
 
@@ -144,7 +280,10 @@ describe("CommunityLedger", function () {
     const { communityLedger, resident } = await loadFixture(deployContract);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     await communityLedger.removeProposal("Test Proposal");
     expect(await communityLedger.isProposal("Test Proposal")).to.equal(false);
@@ -154,7 +293,10 @@ describe("CommunityLedger", function () {
     const { communityLedger, resident } = await loadFixture(deployContract);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     const instance = communityLedger.connect(resident);
     await expect(instance.removeProposal("Test Proposal")).to.be.revertedWith(
@@ -173,7 +315,10 @@ describe("CommunityLedger", function () {
     const { communityLedger, resident } = await loadFixture(deployContract);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     await communityLedger.openVote("Test Proposal");
     await expect(
@@ -186,11 +331,36 @@ describe("CommunityLedger", function () {
     await communityLedger.addResident(resident.address, 1201);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     const instance = communityLedger.connect(resident);
     await expect(instance.openVote("Test Proposal")).to.be.revertedWith(
       "Only manager can call this function"
+    );
+  });
+
+  it("should NOT open a vote if proposal is not pending", async function () {
+    const { communityLedger, resident } = await loadFixture(deployContract);
+    await communityLedger.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
+    );
+    await communityLedger.openVote("Test Proposal");
+    await expect(communityLedger.openVote("Test Proposal")).to.be.revertedWith(
+      "Proposal is not pending"
+    );
+  });
+
+  it("should NOT open a vote if proposal does not exist", async function () {
+    const { communityLedger, resident } = await loadFixture(deployContract);
+    await expect(communityLedger.openVote("Test Proposal")).to.be.revertedWith(
+      "Proposal does not exist"
     );
   });
 
@@ -199,11 +369,14 @@ describe("CommunityLedger", function () {
     await communityLedger.addResident(resident.address, 1201);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     await communityLedger.openVote("Test Proposal");
     const instance = communityLedger.connect(resident);
-    await instance.vote("Test Proposal", Options.YES);
+    await instance.vote("Test Proposal", Options.ABSTAIN);
     expect(await communityLedger.getVotes("Test Proposal")).to.equal(1);
   });
 
@@ -212,7 +385,10 @@ describe("CommunityLedger", function () {
     await communityLedger.addResident(resident.address, 1201);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     await communityLedger.openVote("Test Proposal");
     const instance = communityLedger.connect(resident);
@@ -227,7 +403,10 @@ describe("CommunityLedger", function () {
     await communityLedger.addResident(resident.address, 1201);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     const instance = communityLedger.connect(resident);
     await expect(
@@ -248,7 +427,10 @@ describe("CommunityLedger", function () {
     const { communityLedger, resident } = await loadFixture(deployContract);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     await communityLedger.openVote("Test Proposal");
     const instance = communityLedger.connect(resident);
@@ -262,7 +444,10 @@ describe("CommunityLedger", function () {
     await communityLedger.addResident(resident.address, 1201);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     await communityLedger.openVote("Test Proposal");
     const instance = communityLedger.connect(resident);
@@ -272,21 +457,43 @@ describe("CommunityLedger", function () {
   });
 
   it("should close the vote correctly", async function () {
-    const { communityLedger, resident } = await loadFixture(deployContract);
-    await communityLedger.addResident(resident.address, 1201);
+    const { communityLedger, accounts, resident } = await loadFixture(
+      deployContract
+    );
+    await addResidents(communityLedger, 11, accounts);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     await communityLedger.openVote("Test Proposal");
-
-    await communityLedger.vote("Test Proposal", Options.YES);
-    const instance = communityLedger.connect(resident);
-    await instance.vote("Test Proposal", Options.YES);
+    await addVotes(communityLedger, 10, accounts, false);
+    await communityLedger
+      .connect(accounts[11])
+      .vote("Test Proposal", Options.ABSTAIN);
     await communityLedger.closeVote("Test Proposal");
 
     const proposal = await communityLedger.getProposal("Test Proposal");
-    expect(proposal.status).to.equal(VoteStatus.APPROVED);
+    expect(proposal.status).to.equal(VoteStatus.REJECTED);
+  });
+
+  it("should NOT close the vote if not enough votes", async function () {
+    const { communityLedger, accounts, resident } = await loadFixture(
+      deployContract
+    );
+    await communityLedger.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
+    );
+    await communityLedger.openVote("Test Proposal");
+    await expect(communityLedger.closeVote("Test Proposal")).to.be.revertedWith(
+      "Not enough votes"
+    );
   });
 
   it("should NOT close the vote if not manager", async function () {
@@ -294,7 +501,10 @@ describe("CommunityLedger", function () {
     await communityLedger.addResident(resident.address, 1201);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     await communityLedger.openVote("Test Proposal");
     const instance = communityLedger.connect(resident);
@@ -314,7 +524,10 @@ describe("CommunityLedger", function () {
     const { communityLedger, resident } = await loadFixture(deployContract);
     await communityLedger.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      resident.address
     );
     await expect(communityLedger.closeVote("Test Proposal")).to.be.revertedWith(
       "Vote is not open"

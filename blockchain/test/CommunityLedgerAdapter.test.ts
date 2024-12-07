@@ -1,6 +1,8 @@
 import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { CommunityLedgerAdapter } from "../typechain-types";
+import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("CommunityLedgerAdapter", function () {
   enum Options {
@@ -15,6 +17,42 @@ describe("CommunityLedgerAdapter", function () {
     VOTING = 1,
     APPROVED = 2,
     REJECTED = 3,
+  }
+
+  enum Category {
+    DECISION,
+    SPENDING,
+    CHANGE_QUOTA,
+    CHANGE_MANAGER,
+  }
+
+  async function addResidents(
+    adapter: CommunityLedgerAdapter,
+    count: number,
+    accounts: SignerWithAddress[]
+  ) {
+    let accountIndex = 1;
+    for (let floor = 1; floor <= 24 && accountIndex <= count; floor++) {
+      for (let unit = 1; unit <= 4 && accountIndex <= count; unit++) {
+        const apartmentNumber = floor * 100 + unit;
+        await adapter.addResident(
+          accounts[accountIndex].address,
+          apartmentNumber
+        );
+        accountIndex++;
+      }
+    }
+  }
+
+  async function addVotes(
+    adapter: CommunityLedgerAdapter,
+    count: number,
+    accounts: SignerWithAddress[]
+  ) {
+    for (let i = 1; i <= count; i++) {
+      const instance = adapter.connect(accounts[i]);
+      await instance.vote("Test Proposal", Options.YES);
+    }
   }
 
   async function deployAdapterFixture() {
@@ -106,7 +144,10 @@ describe("CommunityLedgerAdapter", function () {
 
     const tx = await adapter.createProposal(
       "Test Proposal",
-      "This is a test proposal"
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      manager.address
     );
 
     expect(await contract.isProposal("Test Proposal")).to.be.true;
@@ -118,7 +159,13 @@ describe("CommunityLedgerAdapter", function () {
     );
     const { contract } = await loadFixture(deployImplementationFixture);
     await adapter.setImplementation(contract.target);
-    await adapter.createProposal("Test Proposal", "This is a test proposal");
+    await adapter.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      manager.address
+    );
 
     const tx = await adapter.removeProposal("Test Proposal");
 
@@ -132,7 +179,13 @@ describe("CommunityLedgerAdapter", function () {
     const { contract } = await loadFixture(deployImplementationFixture);
     await adapter.setImplementation(contract.target);
 
-    await adapter.createProposal("Test Proposal", "This is a test proposal");
+    await adapter.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      manager.address
+    );
     const tx = await adapter.openVote("Test Proposal");
     const proposal = await contract.getProposal("Test Proposal");
 
@@ -146,7 +199,13 @@ describe("CommunityLedgerAdapter", function () {
     const { contract } = await loadFixture(deployImplementationFixture);
     await adapter.setImplementation(contract.target);
 
-    await adapter.createProposal("Test Proposal", "This is a test proposal");
+    await adapter.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      manager.address
+    );
     await adapter.openVote("Test Proposal");
     await adapter.addResident(accounts[1].address, 1201);
     const instance = adapter.connect(accounts[1]);
@@ -162,10 +221,16 @@ describe("CommunityLedgerAdapter", function () {
     const { contract } = await loadFixture(deployImplementationFixture);
     await adapter.setImplementation(contract.target);
 
-    await adapter.createProposal("Test Proposal", "This is a test proposal");
+    await adapter.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      manager.address
+    );
     await adapter.openVote("Test Proposal");
-    await adapter.addResident(accounts[1].address, 1201);
-    await adapter.vote("Test Proposal", Options.YES);
+    await addResidents(adapter, 10, accounts);
+    await addVotes(adapter, 10, accounts);
     await adapter.closeVote("Test Proposal");
 
     const proposal = await contract.getProposal("Test Proposal");

@@ -37,9 +37,18 @@ contract CommunityLedgerAdapter {
 
     function createProposal(
         string memory _title,
-        string memory _description
+        string memory _description,
+        Lib.Category _category,
+        uint256 _amount,
+        address _responsible
     ) external {
-        implementation.createProposal(_title, _description);
+        implementation.createProposal(
+            _title,
+            _description,
+            _category,
+            _amount,
+            _responsible
+        );
     }
 
     function removeProposal(string memory _title) external {

@@ -16,7 +16,10 @@ interface ICommunityLedger {
     //TODO: Improve proposal creation to allow for more complex proposals
     function createProposal(
         string memory title,
-        string memory description
+        string memory description,
+        Lib.Category category,
+        uint256 amount,
+        address responsible
     ) external;
 
     function removeProposal(string memory title) external;
