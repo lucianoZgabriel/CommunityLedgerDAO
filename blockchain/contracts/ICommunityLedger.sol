@@ -40,4 +40,6 @@ interface ICommunityLedger {
     function getVotes(string memory title) external view returns (uint256);
 
     function payQuota(uint16 residenceId) external payable;
+
+    function transfer(string memory title, uint256 amount) external;
 }

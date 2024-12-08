@@ -7,7 +7,8 @@ library CommunityLedgerLib {
         PENDING,
         VOTING,
         APPROVED,
-        REJECTED
+        REJECTED,
+        EXECUTED
     }
 
     enum Options {

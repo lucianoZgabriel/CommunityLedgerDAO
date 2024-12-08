@@ -280,4 +280,31 @@ contract CommunityLedger is ICommunityLedger {
 
         s_payments[residenceId] = block.timestamp;
     }
+
+    function transfer(
+        string memory _proposalTitle,
+        uint256 _amount
+    ) external onlyManager {
+        require(address(this).balance >= _amount, "Insufficient balance");
+
+        Lib.Proposal memory proposal = getProposal(_proposalTitle);
+        require(proposal.createdAt > 0, "Proposal does not exist");
+        require(
+            proposal.status == Lib.VoteStatus.APPROVED,
+            "Proposal is not approved"
+        );
+        require(
+            proposal.category == Lib.Category.SPENDING,
+            "Proposal is not a spending proposal"
+        );
+        require(
+            proposal.amount >= _amount,
+            "The amount must be less than or equal to the proposal amount"
+        );
+
+        payable(proposal.responsible).transfer(_amount);
+
+        bytes32 proposalId = keccak256(bytes(_proposalTitle));
+        proposals[proposalId].status = Lib.VoteStatus.EXECUTED;
+    }
 }

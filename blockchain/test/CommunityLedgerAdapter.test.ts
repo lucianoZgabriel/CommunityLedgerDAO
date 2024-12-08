@@ -17,6 +17,7 @@ describe("CommunityLedgerAdapter", function () {
     VOTING = 1,
     APPROVED = 2,
     REJECTED = 3,
+    EXECUTED = 4,
   }
 
   enum Category {
@@ -384,5 +385,52 @@ describe("CommunityLedgerAdapter", function () {
     await expect(
       adapter.payQuota(1201, { value: ethers.parseEther("0.01") })
     ).to.be.revertedWith("Implementation not set");
+  });
+
+  it("should transfer", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+    const { contract } = await loadFixture(deployImplementationFixture);
+    await adapter.setImplementation(contract.target);
+
+    await adapter.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.SPENDING,
+      100,
+      accounts[1].address
+    );
+    await adapter.openVote("Test Proposal");
+    await addResidents(adapter, 10, accounts);
+    await addVotes(adapter, 10, accounts);
+    await adapter.closeVote("Test Proposal");
+
+    const balanceBefore = await ethers.provider.getBalance(contract.target);
+    const workerBalanceBefore = await ethers.provider.getBalance(
+      accounts[1].address
+    );
+
+    const tx = await adapter.transfer("Test Proposal", 100);
+
+    const balanceAfter = await ethers.provider.getBalance(contract.target);
+    const workerBalanceAfter = await ethers.provider.getBalance(
+      accounts[1].address
+    );
+    const proposal = await contract.getProposal("Test Proposal");
+
+    expect(balanceAfter).to.equal(balanceBefore - 100n);
+    expect(workerBalanceAfter).to.equal(workerBalanceBefore + 100n);
+    expect(proposal.status).to.equal(VoteStatus.EXECUTED);
+  });
+
+  it("should NOT transfer if implementation is not set", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(adapter.transfer("Test Proposal", 100)).to.be.revertedWith(
+      "Implementation not set"
+    );
   });
 });

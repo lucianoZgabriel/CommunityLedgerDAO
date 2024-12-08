@@ -105,4 +105,11 @@ contract CommunityLedgerAdapter {
     function payQuota(uint16 residenceId) external payable implementationSet {
         implementation.payQuota{value: msg.value}(residenceId);
     }
+
+    function transfer(
+        string memory _proposalTitle,
+        uint256 _amount
+    ) external implementationSet {
+        implementation.transfer(_proposalTitle, _amount);
+    }
 }

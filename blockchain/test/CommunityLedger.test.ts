@@ -17,6 +17,7 @@ describe("CommunityLedger", function () {
     VOTING = 1,
     APPROVED = 2,
     REJECTED = 3,
+    EXECUTED = 4,
   }
 
   enum Category {
@@ -700,5 +701,102 @@ describe("CommunityLedger", function () {
     await expect(
       instance.payQuota(1201, { value: ethers.parseEther("0.01") })
     ).to.be.revertedWith("Quota already paid this month");
+  });
+
+  it("should NOT transfer if it is not the manager", async function () {
+    const { communityLedger, resident } = await loadFixture(deployContract);
+    const instance = communityLedger.connect(resident);
+    await expect(instance.transfer("Test Proposal", 100)).to.be.revertedWith(
+      "Only manager can call this function"
+    );
+  });
+
+  it("should NOT transfer if the balance is insufficient", async function () {
+    const { communityLedger, resident } = await loadFixture(deployContract);
+    await expect(
+      communityLedger.transfer("Test Proposal", 100)
+    ).to.be.revertedWith("Insufficient balance");
+  });
+
+  it("should NOT transfer if the proposal is not approved", async function () {
+    const { communityLedger, resident, accounts } = await loadFixture(
+      deployContract
+    );
+    await communityLedger.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.SPENDING,
+      100,
+      resident.address
+    );
+    await addResidents(communityLedger, 10, accounts);
+    await communityLedger.openVote("Test Proposal");
+    await addVotes(communityLedger, 10, accounts, false);
+    await communityLedger.closeVote("Test Proposal");
+    await expect(
+      communityLedger.transfer("Test Proposal", 100)
+    ).to.be.revertedWith("Proposal is not approved");
+  });
+
+  it("should NOT transfer if the proposal is not a spending proposal", async function () {
+    const { communityLedger, resident, accounts } = await loadFixture(
+      deployContract
+    );
+    await addResidents(communityLedger, 19, accounts);
+    await communityLedger.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.CHANGE_QUOTA,
+      100,
+      resident.address
+    );
+    await communityLedger.openVote("Test Proposal");
+    await addVotes(communityLedger, 19, accounts, true);
+    await communityLedger.closeVote("Test Proposal");
+    await expect(
+      communityLedger.transfer("Test Proposal", 100)
+    ).to.be.revertedWith("Proposal is not a spending proposal");
+  });
+
+  it("should NOT transfer if the amount is greater than the proposal amount", async function () {
+    const { communityLedger, resident, accounts } = await loadFixture(
+      deployContract
+    );
+    await communityLedger.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.SPENDING,
+      100,
+      resident.address
+    );
+    await addResidents(communityLedger, 10, accounts);
+    await communityLedger.openVote("Test Proposal");
+    await addVotes(communityLedger, 10, accounts, true);
+    await communityLedger.closeVote("Test Proposal");
+    await expect(
+      communityLedger.transfer("Test Proposal", 101)
+    ).to.be.revertedWith(
+      "The amount must be less than or equal to the proposal amount"
+    );
+  });
+
+  it("should NOT transfer if the proposal does not exist", async function () {
+    const { communityLedger, resident, accounts } = await loadFixture(
+      deployContract
+    );
+    await addResidents(communityLedger, 10, accounts);
+    await communityLedger.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.SPENDING,
+      100,
+      resident.address
+    );
+    await communityLedger.openVote("Test Proposal");
+    await addVotes(communityLedger, 10, accounts, true);
+    await communityLedger.closeVote("Test Proposal");
+    await expect(
+      communityLedger.transfer("Test Proposal 2", 100)
+    ).to.be.revertedWith("Proposal does not exist");
   });
 });
