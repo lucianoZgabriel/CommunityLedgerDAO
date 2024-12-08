@@ -25,7 +25,6 @@ describe("CommunityLedgerAdapter", function () {
     CHANGE_QUOTA,
     CHANGE_MANAGER,
   }
-
   async function addResidents(
     adapter: CommunityLedgerAdapter,
     count: number,
@@ -39,6 +38,10 @@ describe("CommunityLedgerAdapter", function () {
           accounts[accountIndex].address,
           apartmentNumber
         );
+        const instance = adapter.connect(accounts[accountIndex]);
+        await instance.payQuota(apartmentNumber, {
+          value: ethers.parseEther("0.01"),
+        });
         accountIndex++;
       }
     }
@@ -96,6 +99,16 @@ describe("CommunityLedgerAdapter", function () {
     ).to.be.revertedWith("Only the owner can set the implementation");
   });
 
+  it("should NOT set the implementation to 0 address", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(
+      adapter.setImplementation(ethers.ZeroAddress)
+    ).to.be.revertedWith("Invalid implementation address");
+  });
+
   it("should add a resident", async function () {
     const { adapter, manager, accounts } = await loadFixture(
       deployAdapterFixture
@@ -106,6 +119,16 @@ describe("CommunityLedgerAdapter", function () {
     const tx = await adapter.addResident(accounts[1].address, 1201);
 
     expect(await contract.isResident(accounts[1].address)).to.be.true;
+  });
+
+  it("should NOT add a resident if implementation is not set", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(
+      adapter.addResident(accounts[1].address, 1201)
+    ).to.be.revertedWith("Implementation not set");
   });
 
   it("should remove a resident", async function () {
@@ -122,6 +145,16 @@ describe("CommunityLedgerAdapter", function () {
     expect(await contract.isResident(accounts[1].address)).to.be.false;
   });
 
+  it("should NOT remove a resident if implementation is not set", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(
+      adapter.removeResident(accounts[1].address)
+    ).to.be.revertedWith("Implementation not set");
+  });
+
   it("should set a counselor", async function () {
     const { adapter, manager, accounts } = await loadFixture(
       deployAdapterFixture
@@ -133,6 +166,16 @@ describe("CommunityLedgerAdapter", function () {
     const tx = await adapter.setCounselor(accounts[1].address, true);
 
     expect(await contract.isCounselor(accounts[1].address)).to.be.true;
+  });
+
+  it("should NOT set a counselor if implementation is not set", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(
+      adapter.setCounselor(accounts[1].address, true)
+    ).to.be.revertedWith("Implementation not set");
   });
 
   it("should create a proposal", async function () {
@@ -153,6 +196,62 @@ describe("CommunityLedgerAdapter", function () {
     expect(await contract.isProposal("Test Proposal")).to.be.true;
   });
 
+  it("should NOT create a proposal if implementation is not set", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(
+      adapter.createProposal(
+        "Test Proposal",
+        "This is a test proposal",
+        Category.DECISION,
+        0,
+        manager.address
+      )
+    ).to.be.revertedWith("Implementation not set");
+  });
+
+  it("should edit a proposal", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+    const { contract } = await loadFixture(deployImplementationFixture);
+    await adapter.setImplementation(contract.target);
+
+    await adapter.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.SPENDING,
+      0,
+      manager.address
+    );
+    await adapter.editProposal(
+      "Test Proposal",
+      "This is a test proposal 2",
+      10,
+      manager.address
+    );
+    const proposal = await contract.getProposal("Test Proposal");
+    expect(proposal.description).to.equal("This is a test proposal 2");
+    expect(proposal.amount).to.equal(10);
+  });
+
+  it("should NOT edit a proposal if implementation is not set", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(
+      adapter.editProposal(
+        "Test Proposal",
+        "This is a test proposal 2",
+        10,
+        manager.address
+      )
+    ).to.be.revertedWith("Implementation not set");
+  });
+
   it("should remove a proposal", async function () {
     const { adapter, manager, accounts } = await loadFixture(
       deployAdapterFixture
@@ -170,6 +269,16 @@ describe("CommunityLedgerAdapter", function () {
     const tx = await adapter.removeProposal("Test Proposal");
 
     expect(await contract.isProposal("Test Proposal")).to.be.false;
+  });
+
+  it("should NOT remove a proposal if implementation is not set", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(adapter.removeProposal("Test Proposal")).to.be.revertedWith(
+      "Implementation not set"
+    );
   });
 
   it("should open a vote", async function () {
@@ -192,6 +301,16 @@ describe("CommunityLedgerAdapter", function () {
     expect(proposal.status).to.equal(VoteStatus.VOTING);
   });
 
+  it("should NOT open a vote if implementation is not set", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(adapter.openVote("Test Proposal")).to.be.revertedWith(
+      "Implementation not set"
+    );
+  });
+
   it("should vote", async function () {
     const { adapter, manager, accounts } = await loadFixture(
       deployAdapterFixture
@@ -207,11 +326,21 @@ describe("CommunityLedgerAdapter", function () {
       manager.address
     );
     await adapter.openVote("Test Proposal");
-    await adapter.addResident(accounts[1].address, 1201);
+    await addResidents(adapter, 1, accounts);
     const instance = adapter.connect(accounts[1]);
     const tx = await instance.vote("Test Proposal", Options.YES);
 
     expect(await contract.getVotes("Test Proposal")).to.equal(1);
+  });
+
+  it("should NOT vote if implementation is not set", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(adapter.vote("Test Proposal", Options.YES)).to.be.revertedWith(
+      "Implementation not set"
+    );
   });
 
   it("should close a vote", async function () {
@@ -235,5 +364,25 @@ describe("CommunityLedgerAdapter", function () {
 
     const proposal = await contract.getProposal("Test Proposal");
     expect(proposal.status).to.equal(VoteStatus.APPROVED);
+  });
+
+  it("should NOT close a vote if implementation is not set", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(adapter.closeVote("Test Proposal")).to.be.revertedWith(
+      "Implementation not set"
+    );
+  });
+
+  it("should NOT pay the quota if implementation is not set", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+
+    await expect(
+      adapter.payQuota(1201, { value: ethers.parseEther("0.01") })
+    ).to.be.revertedWith("Implementation not set");
   });
 });

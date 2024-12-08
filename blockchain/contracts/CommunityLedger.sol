@@ -7,9 +7,11 @@ import {ICommunityLedger} from "./ICommunityLedger.sol";
 contract CommunityLedger is ICommunityLedger {
     address public s_manager;
     uint256 public s_monthlyQuota = 0.01 ether;
+
     mapping(uint16 => bool) public s_residences;
     mapping(address => uint16) public s_residents;
     mapping(address => bool) public s_counselors;
+    mapping(uint16 => uint256) public s_payments;
 
     mapping(bytes32 => Lib.Proposal) public proposals;
     mapping(bytes32 => Lib.Vote[]) public votes;
@@ -42,6 +44,17 @@ contract CommunityLedger is ICommunityLedger {
             tx.origin == s_manager || isResident(tx.origin),
             "Only manager or resident can call this function"
         );
+        require(
+            tx.origin == s_manager ||
+                block.timestamp <
+                s_payments[s_residents[tx.origin]] + (30 days),
+            "Resident has not paid the quota this month"
+        );
+        _;
+    }
+
+    modifier validAddress(address addr) {
+        require(addr != address(0), "Invalid address");
         _;
     }
 
@@ -60,7 +73,7 @@ contract CommunityLedger is ICommunityLedger {
     function addResident(
         address resident,
         uint16 residence
-    ) external onlyCouncil {
+    ) external onlyCouncil validAddress(resident) {
         require(isResidence(residence), "Residence does not exist");
         s_residents[resident] = residence;
     }
@@ -73,7 +86,7 @@ contract CommunityLedger is ICommunityLedger {
     function setCounselor(
         address resident,
         bool isEntering
-    ) external onlyManager {
+    ) external onlyManager validAddress(resident) {
         if (isEntering) {
             require(isResident(resident), "The counselor must be a resident");
             s_counselors[resident] = true;
@@ -103,8 +116,8 @@ contract CommunityLedger is ICommunityLedger {
         require(!isProposal(_title), "Proposal already exists");
         if (_amount > 0) {
             require(
-                _category == Lib.Category.SPENDING ||
-                    _category == Lib.Category.CHANGE_QUOTA,
+                _category == Lib.Category.CHANGE_QUOTA ||
+                    _category == Lib.Category.SPENDING,
                 "Invalid category"
             );
         }
@@ -123,6 +136,32 @@ contract CommunityLedger is ICommunityLedger {
 
         bytes32 proposalId = keccak256(bytes(_title));
         proposals[proposalId] = newProposal;
+    }
+
+    function editProposal(
+        string memory _proposalTitle,
+        string memory _description,
+        uint256 _amount,
+        address _responsible
+    ) external onlyManager {
+        Lib.Proposal memory proposal = getProposal(_proposalTitle);
+        require(proposal.createdAt > 0, "Proposal does not exist");
+        require(
+            proposal.status == Lib.VoteStatus.PENDING,
+            "Only pending proposals can be edited"
+        );
+
+        bytes32 proposalId = keccak256(bytes(_proposalTitle));
+
+        if (bytes(_description).length > 0) {
+            proposals[proposalId].description = _description;
+        }
+        if (_amount > 0) {
+            proposals[proposalId].amount = _amount;
+        }
+        if (_responsible != address(0)) {
+            proposals[proposalId].responsible = _responsible;
+        }
     }
 
     function removeProposal(string memory _title) external onlyManager {
@@ -229,5 +268,16 @@ contract CommunityLedger is ICommunityLedger {
     function getVotes(string memory _title) public view returns (uint256) {
         bytes32 proposalId = keccak256(bytes(_title));
         return votes[proposalId].length;
+    }
+
+    function payQuota(uint16 residenceId) external payable {
+        require(isResidence(residenceId), "Residence does not exist");
+        require(msg.value >= s_monthlyQuota, "Insufficient amount");
+        require(
+            block.timestamp > s_payments[residenceId] + (30 days),
+            "Quota already paid this month"
+        );
+
+        s_payments[residenceId] = block.timestamp;
     }
 }

@@ -22,6 +22,13 @@ interface ICommunityLedger {
         address responsible
     ) external;
 
+    function editProposal(
+        string memory proposalTitle,
+        string memory description,
+        uint256 amount,
+        address responsible
+    ) external;
+
     function removeProposal(string memory title) external;
 
     function openVote(string memory title) external;
@@ -32,11 +39,5 @@ interface ICommunityLedger {
 
     function getVotes(string memory title) external view returns (uint256);
 
-    //TODO: Create Edit Proposal function
-
-    //TODO: Set quota for resident
-
-    //TODO: Pay quota
-
-    //TODO: Create a function to allow the manager to pay the bills
+    function payQuota(uint16 residenceId) external payable;
 }

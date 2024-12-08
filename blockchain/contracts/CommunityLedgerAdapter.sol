@@ -11,6 +11,14 @@ contract CommunityLedgerAdapter {
         i_owner = msg.sender;
     }
 
+    modifier implementationSet() {
+        require(
+            address(implementation) != address(0),
+            "Implementation not set"
+        );
+        _;
+    }
+
     function getImplAddress() external view returns (address) {
         return address(implementation);
     }
@@ -20,18 +28,28 @@ contract CommunityLedgerAdapter {
             msg.sender == i_owner,
             "Only the owner can set the implementation"
         );
+        require(
+            _implementation != address(0),
+            "Invalid implementation address"
+        );
         implementation = ICommunityLedger(_implementation);
     }
 
-    function addResident(address _resident, uint16 _residence) external {
+    function addResident(
+        address _resident,
+        uint16 _residence
+    ) external implementationSet {
         implementation.addResident(_resident, _residence);
     }
 
-    function removeResident(address _resident) external {
+    function removeResident(address _resident) external implementationSet {
         implementation.removeResident(_resident);
     }
 
-    function setCounselor(address _resident, bool _isEntering) external {
+    function setCounselor(
+        address _resident,
+        bool _isEntering
+    ) external implementationSet {
         implementation.setCounselor(_resident, _isEntering);
     }
 
@@ -41,7 +59,7 @@ contract CommunityLedgerAdapter {
         Lib.Category _category,
         uint256 _amount,
         address _responsible
-    ) external {
+    ) external implementationSet {
         implementation.createProposal(
             _title,
             _description,
@@ -51,19 +69,40 @@ contract CommunityLedgerAdapter {
         );
     }
 
-    function removeProposal(string memory _title) external {
+    function editProposal(
+        string memory _proposalTitle,
+        string memory _description,
+        uint256 _amount,
+        address _responsible
+    ) external implementationSet {
+        implementation.editProposal(
+            _proposalTitle,
+            _description,
+            _amount,
+            _responsible
+        );
+    }
+
+    function removeProposal(string memory _title) external implementationSet {
         implementation.removeProposal(_title);
     }
 
-    function openVote(string memory _title) external {
+    function openVote(string memory _title) external implementationSet {
         implementation.openVote(_title);
     }
 
-    function vote(string memory _title, Lib.Options _option) external {
+    function vote(
+        string memory _title,
+        Lib.Options _option
+    ) external implementationSet {
         implementation.vote(_title, _option);
     }
 
-    function closeVote(string memory _title) external {
+    function closeVote(string memory _title) external implementationSet {
         implementation.closeVote(_title);
+    }
+
+    function payQuota(uint16 residenceId) external payable implementationSet {
+        implementation.payQuota{value: msg.value}(residenceId);
     }
 }
