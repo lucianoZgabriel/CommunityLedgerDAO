@@ -11,9 +11,6 @@ interface ICommunityLedger {
 
     function setCounselor(address resident, bool isEntering) external;
 
-    //TODO: Change setManager to be voted on by the community
-
-    //TODO: Improve proposal creation to allow for more complex proposals
     function createProposal(
         string memory title,
         string memory description,
@@ -27,19 +24,32 @@ interface ICommunityLedger {
         string memory description,
         uint256 amount,
         address responsible
-    ) external;
+    ) external returns (Lib.ProposalUpdate memory);
 
-    function removeProposal(string memory title) external;
+    function removeProposal(
+        string memory title
+    ) external returns (Lib.ProposalUpdate memory);
 
-    function openVote(string memory title) external;
+    function openVote(
+        string memory title
+    ) external returns (Lib.ProposalUpdate memory);
 
     function vote(string memory title, Lib.Options option) external;
 
-    function closeVote(string memory title) external;
+    function closeVote(
+        string memory title
+    ) external returns (Lib.ProposalUpdate memory);
 
     function getVotes(string memory title) external view returns (uint256);
 
     function payQuota(uint16 residenceId) external payable;
 
-    function transfer(string memory title, uint256 amount) external;
+    function transfer(
+        string memory title,
+        uint256 amount
+    ) external returns (Lib.TransferReceipt memory);
+
+    function getManager() external view returns (address);
+
+    function getQuota() external view returns (uint256);
 }

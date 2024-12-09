@@ -8,6 +8,7 @@ library CommunityLedgerLib {
         VOTING,
         APPROVED,
         REJECTED,
+        DELETED,
         EXECUTED
     }
 
@@ -42,5 +43,18 @@ library CommunityLedgerLib {
         uint16 residence;
         Options option;
         uint256 createdAt;
+    }
+
+    struct ProposalUpdate {
+        bytes32 proposalId;
+        string title;
+        Category category;
+        VoteStatus status;
+    }
+
+    struct TransferReceipt {
+        address to;
+        uint256 amount;
+        string proposalTitle;
     }
 }

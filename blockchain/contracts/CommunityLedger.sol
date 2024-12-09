@@ -143,7 +143,7 @@ contract CommunityLedger is ICommunityLedger {
         string memory _description,
         uint256 _amount,
         address _responsible
-    ) external onlyManager {
+    ) external onlyManager returns (Lib.ProposalUpdate memory) {
         Lib.Proposal memory proposal = getProposal(_proposalTitle);
         require(proposal.createdAt > 0, "Proposal does not exist");
         require(
@@ -162,9 +162,19 @@ contract CommunityLedger is ICommunityLedger {
         if (_responsible != address(0)) {
             proposals[proposalId].responsible = _responsible;
         }
+
+        return
+            Lib.ProposalUpdate({
+                proposalId: proposalId,
+                title: proposal.title,
+                category: proposal.category,
+                status: proposal.status
+            });
     }
 
-    function removeProposal(string memory _title) external onlyManager {
+    function removeProposal(
+        string memory _title
+    ) external onlyManager returns (Lib.ProposalUpdate memory) {
         Lib.Proposal memory proposal = getProposal(_title);
         require(proposal.createdAt > 0, "Proposal does not exist");
         require(
@@ -172,10 +182,21 @@ contract CommunityLedger is ICommunityLedger {
             "Only pending proposals can be removed"
         );
 
-        delete proposals[keccak256(bytes(_title))];
+        bytes32 proposalId = keccak256(bytes(_title));
+        delete proposals[proposalId];
+
+        return
+            Lib.ProposalUpdate({
+                proposalId: proposalId,
+                title: proposal.title,
+                category: proposal.category,
+                status: Lib.VoteStatus.DELETED
+            });
     }
 
-    function openVote(string memory _title) external onlyManager {
+    function openVote(
+        string memory _title
+    ) external onlyManager returns (Lib.ProposalUpdate memory) {
         Lib.Proposal memory proposal = getProposal(_title);
         require(proposal.createdAt > 0, "Proposal does not exist");
         require(
@@ -186,6 +207,14 @@ contract CommunityLedger is ICommunityLedger {
         bytes32 proposalId = keccak256(bytes(_title));
         proposals[proposalId].status = Lib.VoteStatus.VOTING;
         proposals[proposalId].updatedAt = block.timestamp;
+
+        return
+            Lib.ProposalUpdate({
+                proposalId: proposalId,
+                title: proposal.title,
+                category: proposal.category,
+                status: Lib.VoteStatus.VOTING
+            });
     }
 
     function vote(
@@ -216,7 +245,9 @@ contract CommunityLedger is ICommunityLedger {
         votes[proposalId].push(newVote);
     }
 
-    function closeVote(string memory _title) external onlyManager {
+    function closeVote(
+        string memory _title
+    ) external onlyManager returns (Lib.ProposalUpdate memory) {
         Lib.Proposal memory proposal = getProposal(_title);
         require(proposal.createdAt > 0, "Proposal does not exist");
         require(proposal.status == Lib.VoteStatus.VOTING, "Vote is not open");
@@ -263,6 +294,14 @@ contract CommunityLedger is ICommunityLedger {
                 s_manager = proposal.responsible;
             }
         }
+
+        return
+            Lib.ProposalUpdate({
+                proposalId: proposalId,
+                title: proposal.title,
+                category: proposal.category,
+                status: newStatus
+            });
     }
 
     function getVotes(string memory _title) public view returns (uint256) {
@@ -284,7 +323,7 @@ contract CommunityLedger is ICommunityLedger {
     function transfer(
         string memory _proposalTitle,
         uint256 _amount
-    ) external onlyManager {
+    ) external onlyManager returns (Lib.TransferReceipt memory) {
         require(address(this).balance >= _amount, "Insufficient balance");
 
         Lib.Proposal memory proposal = getProposal(_proposalTitle);
@@ -306,5 +345,20 @@ contract CommunityLedger is ICommunityLedger {
 
         bytes32 proposalId = keccak256(bytes(_proposalTitle));
         proposals[proposalId].status = Lib.VoteStatus.EXECUTED;
+
+        return
+            Lib.TransferReceipt({
+                to: proposal.responsible,
+                amount: _amount,
+                proposalTitle: _proposalTitle
+            });
+    }
+
+    function getManager() external view returns (address) {
+        return s_manager;
+    }
+
+    function getQuota() external view returns (uint256) {
+        return s_monthlyQuota;
     }
 }

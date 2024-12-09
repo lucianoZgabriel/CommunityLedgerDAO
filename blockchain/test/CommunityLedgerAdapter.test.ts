@@ -17,7 +17,8 @@ describe("CommunityLedgerAdapter", function () {
     VOTING = 1,
     APPROVED = 2,
     REJECTED = 3,
-    EXECUTED = 4,
+    DELETED = 4,
+    EXECUTED = 5,
   }
 
   enum Category {
@@ -51,11 +52,12 @@ describe("CommunityLedgerAdapter", function () {
   async function addVotes(
     adapter: CommunityLedgerAdapter,
     count: number,
-    accounts: SignerWithAddress[]
+    accounts: SignerWithAddress[],
+    deny: boolean = false
   ) {
     for (let i = 1; i <= count; i++) {
       const instance = adapter.connect(accounts[i]);
-      await instance.vote("Test Proposal", Options.YES);
+      await instance.vote("Test Proposal", deny ? Options.NO : Options.YES);
     }
   }
 
@@ -432,5 +434,74 @@ describe("CommunityLedgerAdapter", function () {
     await expect(adapter.transfer("Test Proposal", 100)).to.be.revertedWith(
       "Implementation not set"
     );
+  });
+
+  it("should emit a manager changed event", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+    const { contract } = await loadFixture(deployImplementationFixture);
+    await adapter.setImplementation(contract.target);
+
+    await adapter.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.CHANGE_MANAGER,
+      0,
+      accounts[1].address
+    );
+    await adapter.openVote("Test Proposal");
+    await addResidents(adapter, 15, accounts);
+    await addVotes(adapter, 15, accounts);
+
+    await expect(adapter.closeVote("Test Proposal"))
+      .to.emit(adapter, "ManagerChanged")
+      .withArgs(accounts[1].address);
+  });
+
+  it("should emit a quota changed event", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+    const { contract } = await loadFixture(deployImplementationFixture);
+    await adapter.setImplementation(contract.target);
+
+    await adapter.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.CHANGE_QUOTA,
+      100,
+      manager.address
+    );
+    await adapter.openVote("Test Proposal");
+    await addResidents(adapter, 19, accounts);
+    await addVotes(adapter, 19, accounts);
+
+    await expect(adapter.closeVote("Test Proposal"))
+      .to.emit(adapter, "QuotaChanged")
+      .withArgs(100);
+  });
+
+  it("should close a vote with a deny decision", async function () {
+    const { adapter, manager, accounts } = await loadFixture(
+      deployAdapterFixture
+    );
+    const { contract } = await loadFixture(deployImplementationFixture);
+    await adapter.setImplementation(contract.target);
+
+    await adapter.createProposal(
+      "Test Proposal",
+      "This is a test proposal",
+      Category.DECISION,
+      0,
+      manager.address
+    );
+    await adapter.openVote("Test Proposal");
+    await addResidents(adapter, 10, accounts);
+    await addVotes(adapter, 10, accounts, true);
+    await adapter.closeVote("Test Proposal");
+
+    const proposal = await contract.getProposal("Test Proposal");
+    expect(proposal.status).to.equal(VoteStatus.REJECTED);
   });
 });

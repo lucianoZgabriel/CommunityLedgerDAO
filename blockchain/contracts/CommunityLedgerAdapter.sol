@@ -7,6 +7,15 @@ contract CommunityLedgerAdapter {
     ICommunityLedger public implementation;
     address public immutable i_owner;
 
+    event QuotaChanged(uint256 amount);
+    event ManagerChanged(address manager);
+    event ProposalChanged(
+        bytes32 indexed proposalId,
+        string title,
+        Lib.VoteStatus indexed status
+    );
+    event Transfer(address to, uint256 indexed amout, string proposalTitle);
+
     constructor() {
         i_owner = msg.sender;
     }
@@ -75,20 +84,38 @@ contract CommunityLedgerAdapter {
         uint256 _amount,
         address _responsible
     ) external implementationSet {
-        implementation.editProposal(
+        Lib.ProposalUpdate memory proposalUpdate = implementation.editProposal(
             _proposalTitle,
             _description,
             _amount,
             _responsible
         );
+        emit ProposalChanged(
+            proposalUpdate.proposalId,
+            proposalUpdate.title,
+            proposalUpdate.status
+        );
     }
 
     function removeProposal(string memory _title) external implementationSet {
-        implementation.removeProposal(_title);
+        Lib.ProposalUpdate memory proposalUpdate = implementation
+            .removeProposal(_title);
+        emit ProposalChanged(
+            proposalUpdate.proposalId,
+            proposalUpdate.title,
+            proposalUpdate.status
+        );
     }
 
     function openVote(string memory _title) external implementationSet {
-        implementation.openVote(_title);
+        Lib.ProposalUpdate memory proposalUpdate = implementation.openVote(
+            _title
+        );
+        emit ProposalChanged(
+            proposalUpdate.proposalId,
+            proposalUpdate.title,
+            proposalUpdate.status
+        );
     }
 
     function vote(
@@ -99,7 +126,24 @@ contract CommunityLedgerAdapter {
     }
 
     function closeVote(string memory _title) external implementationSet {
-        implementation.closeVote(_title);
+        Lib.ProposalUpdate memory proposalUpdate = implementation.closeVote(
+            _title
+        );
+        emit ProposalChanged(
+            proposalUpdate.proposalId,
+            proposalUpdate.title,
+            proposalUpdate.status
+        );
+
+        if (proposalUpdate.status == Lib.VoteStatus.APPROVED) {
+            if (proposalUpdate.category == Lib.Category.CHANGE_MANAGER) {
+                emit ManagerChanged(implementation.getManager());
+            }
+
+            if (proposalUpdate.category == Lib.Category.CHANGE_QUOTA) {
+                emit QuotaChanged(implementation.getQuota());
+            }
+        }
     }
 
     function payQuota(uint16 residenceId) external payable implementationSet {
@@ -110,6 +154,14 @@ contract CommunityLedgerAdapter {
         string memory _proposalTitle,
         uint256 _amount
     ) external implementationSet {
-        implementation.transfer(_proposalTitle, _amount);
+        Lib.TransferReceipt memory transferReceipt = implementation.transfer(
+            _proposalTitle,
+            _amount
+        );
+        emit Transfer(
+            transferReceipt.to,
+            transferReceipt.amount,
+            transferReceipt.proposalTitle
+        );
     }
 }
