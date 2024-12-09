@@ -5,7 +5,8 @@
   "scripts": {
     "build": "npx hardhat compile",
     "test": "npx hardhat test",
-    "coverage": "npx hardhat coverage"
+    "coverage": "npx hardhat coverage",
+    "deploy:sepolia": "npx hardhat ignition deploy ignition/modules/CommunityLedger.ts --network sepolia"
   },
   "keywords": [
     "community",
@@ -17,5 +18,8 @@
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "hardhat": "^2.22.16",
     "solidity-coverage": "^0.8.14"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
   }
 }
